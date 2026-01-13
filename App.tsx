@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import * as LucideIcons from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -31,8 +30,7 @@ const App: React.FC = () => {
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-
+  
   // Template Creator State
   const [newTemplate, setNewTemplate] = useState<Department>({
     id: '',
@@ -45,15 +43,10 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
+    
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    
+        
     const loadData = async () => {
       try {
         await db.init();
@@ -70,8 +63,7 @@ const App: React.FC = () => {
 
     return () => {
       window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('offline', handleOffline);     
     };
   }, []);
 
@@ -110,6 +102,61 @@ const App: React.FC = () => {
   };
 
   const status = getStatus(totals.percentage);
+
+  // --- AI Intelligence ---
+  const generateAISummary = async () => {
+    if (!isOnline) { setErrorMessage("Active network required for AI synthesis."); return; }
+    setIsGeneratingSummary(true);
+    setErrorMessage(null);
+
+    const breakdown = selectedDepartment.sections.map(s => {
+      const score = totals.sectionSubtotals[s.id];
+      const max = s.maxScore || s.questions.length * 2;
+      return `${s.title}: ${score}/${max} (${Math.round((score/max)*100)}%)`;
+    }).join(', ');
+
+    const issues = actionPlan.map(a => `- ${a.problem}`).join('\n');
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Audited Department: ${selectedDepartment.name}
+Compliance Score: ${Math.round(totals.percentage)}%
+Section Breakdown: ${breakdown}
+Identified Deficiencies:
+${issues || 'None reported.'}`,
+        config: {
+          systemInstruction: "You are a World-Class Hospital Infection Control (IPC) Auditor. Provide a high-impact executive summary (max 120 words). Identify top 2 critical risks and provide 1 strategic recommendation. Use precise medical terminology.",
+        },
+      });
+      if (response.text) setAiSummary(response.text.trim());
+    } catch (e) {
+      setErrorMessage("Gemini Synthesis engine failed. Please retry.");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  const suggestActionPlan = async (id: string, problem: string) => {
+    if (!problem.trim() || !isOnline) return;
+    setIsSuggesting(prev => ({ ...prev, [id]: true }));
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `IPC Deficiency: ${problem}`,
+        config: {
+          systemInstruction: "Suggest a concise, medically sound corrective action (max 15 words) for this IPC deficiency.",
+        },
+      });
+      if (response.text) updateActionPlan(id, 'action', response.text.trim());
+    } catch (e) {
+      setErrorMessage("AI Suggestion failed.");
+    } finally {
+      setIsSuggesting(prev => ({ ...prev, [id]: false }));
+    }
+  };
 
   // --- Handlers ---
   const handleScoreChange = (questionId: string, value: ScoreValue) => {
@@ -192,6 +239,25 @@ const App: React.FC = () => {
         headStyles: { fillColor: [74, 105, 189] }
       });
 
+      if (actionPlan.length > 0) {
+        doc.setFontSize(14); doc.setTextColor(214, 48, 49);
+        doc.text("Corrective Action Plan (Deficiencies)", 15, (doc as any).lastAutoTable.finalY + 15);
+        autoTable(doc, {
+          startY: (doc as any).lastAutoTable.finalY + 20,
+          head: [['Deficiency', 'Remediation', 'Responsibility', 'Target Date']],
+          body: actionPlan.map(a => [a.problem, a.action, a.responsible, a.targetDate]),
+          headStyles: { fillColor: [214, 48, 49] }
+        });
+      }
+
+      if (aiSummary) {
+        doc.setFontSize(14); doc.setTextColor(74, 105, 189);
+        doc.text("Clinical Synthesis & Recommendations", 15, (doc as any).lastAutoTable.finalY + 15);
+        doc.setFontSize(9); doc.setTextColor(50, 50, 50);
+        const splitSummary = doc.splitTextToSize(aiSummary, 180);
+        doc.text(splitSummary, 15, (doc as any).lastAutoTable.finalY + 22);
+      }
+
       // Footer acknowledgement
       doc.setFontSize(8); doc.setTextColor(150, 150, 150);
       doc.text(`Conceptualized & Developed by Dr. Sourav Nath`, 15, 280);
@@ -222,11 +288,17 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#e8ebf2]/95 backdrop-blur-xl animate-fade-in overflow-y-auto">
           <div className="w-full max-w-4xl bg-[#e8ebf2] rounded-[45px] polymer-relief p-10 space-y-8 my-10">
             <header className="flex justify-between items-center">
-              <h2 className="text-3xl font-black text-[#1e272e]">Template Architect</h2>
+              <div className="space-y-1">
+                <h2 className="text-3xl font-black text-[#1e272e]">Template Architect</h2>
+                <p className="text-[10px] font-mono uppercase text-slate-400">Institutional Audit Designer</p>
+              </div>
               <button onClick={() => setIsTemplateManagerOpen(false)} className="p-4 bg-[#e8ebf2] rounded-full polymer-relief text-red-500"><LucideIcons.X /></button>
             </header>
             <div className="space-y-6">
-              <input type="text" value={newTemplate.name} onChange={e => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="Protocol Name (e.g. Isolation Ward)" className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none font-bold text-[#4a69bd]"/>
+              <div className="space-y-2">
+                <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest ml-4">Ward Name</label>
+                <input type="text" value={newTemplate.name} onChange={e => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="Ward Name (e.g. Isolation Ward)" className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none font-bold text-[#4a69bd]"/>
+              </div>
               <button onClick={saveTemplate} className="w-full py-6 bg-[#4a69bd] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg hover:-translate-y-1 transition-all">Save Institutional Standard</button>
             </div>
           </div>
@@ -237,7 +309,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#e8ebf2]/95 backdrop-blur-xl animate-fade-in overflow-y-auto">
           <div className="w-full max-w-3xl bg-[#e8ebf2] rounded-[45px] polymer-relief p-10 space-y-8 my-10 max-h-[90vh] flex flex-col">
             <header className="flex justify-between items-center">
-              <h2 className="text-3xl font-black text-[#1e272e]">Audit Vault</h2>
+              <h2 className="text-3xl font-black text-[#1e272e]">Audit History</h2>
               <button onClick={() => setIsHistoryOpen(false)} className="p-4 bg-[#e8ebf2] rounded-full polymer-relief text-red-500"><LucideIcons.X /></button>
             </header>
             <div className="flex-grow overflow-y-auto space-y-6 pr-2">
@@ -260,6 +332,19 @@ const App: React.FC = () => {
       {/* --- Main Dashboard --- */}
       <div className="w-full max-w-[1100px] flex flex-col gap-8 flex-grow">
         <header className="space-y-6">
+          {errorMessage && (
+            <div className="p-5 bg-red-100 border-l-4 border-red-500 rounded-2xl flex justify-between items-center text-red-800 text-xs font-bold uppercase tracking-widest animate-pulse">
+              <span>{errorMessage}</span>
+              <button onClick={() => setErrorMessage(null)}><LucideIcons.XCircle className="w-5 h-5"/></button>
+            </div>
+          )}
+
+          {showExportSuccess && (
+            <div className="p-5 bg-green-100 border-l-4 border-green-500 rounded-2xl flex justify-between items-center text-green-800 text-xs font-bold uppercase tracking-widest">
+              <span className="flex items-center gap-2"><LucideIcons.CheckCircle className="w-4 h-4"/> Clinical Audit Document Finalized</span>
+            </div>
+          )}
+
           <div className="flex flex-col md:flex-row justify-between items-start gap-6">
             <div className="space-y-2">
               <h1 className="text-5xl md:text-7xl font-black tracking-tighter text-[#1e272e]">
@@ -267,7 +352,7 @@ const App: React.FC = () => {
               </h1>
               <p className="font-mono text-[10px] uppercase font-black text-slate-400 tracking-[0.4em]">See. Assess. Improve.</p>
               <div className="flex flex-wrap gap-2 mt-4 no-print">
-                <button onClick={() => setIsHistoryOpen(true)} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-slate-400 font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all"><LucideIcons.Archive className="w-3.5 h-3.5"/> Vault</button>
+                <button onClick={() => setIsHistoryOpen(true)} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-slate-400 font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all"><LucideIcons.Archive className="w-3.5 h-3.5"/> History</button>
                 <button onClick={() => setIsTemplateManagerOpen(true)} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-[#4a69bd] font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all"><LucideIcons.LayoutTemplate className="w-3.5 h-3.5"/> Designer</button>
               </div>
             </div>
@@ -280,7 +365,7 @@ const App: React.FC = () => {
 
           <div className="bg-[#e8ebf2] p-8 rounded-[40px] polymer-relief grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest ml-4">Protocol</label>
+              <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest ml-4"> Departmental Protocol</label>
               <select value={selectedDeptId} onChange={e => { setSelectedDeptId(e.target.value); startNewAudit(); }} className="w-full bg-[#e8ebf2] p-5 rounded-3xl polymer-inset font-black text-[#2d3436] outline-none">
                 {allTemplates.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
@@ -290,8 +375,8 @@ const App: React.FC = () => {
               <input type="text" value={header.area} onChange={e => setHeader({...header, area: e.target.value})} placeholder="e.g. ICU-2" className="w-full bg-[#e8ebf2] p-5 rounded-3xl polymer-inset outline-none font-bold text-[#2d3436]"/>
             </div>
             <div className="space-y-2">
-              <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest ml-4">Auditor ID</label>
-              <input type="text" value={header.auditor} onChange={e => setHeader({...header, auditor: e.target.value})} placeholder="ID or Badge" className="w-full bg-[#e8ebf2] p-5 rounded-3xl polymer-inset outline-none font-bold text-[#2d3436]"/>
+              <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest ml-4">Auditor Credential</label>
+              <input type="text" value={header.auditor} onChange={e => setHeader({...header, auditor: e.target.value})} placeholder="Full Name or ID" className="w-full bg-[#e8ebf2] p-5 rounded-3xl polymer-inset outline-none font-bold text-[#2d3436]"/>
             </div>
           </div>
         </header>
@@ -325,29 +410,74 @@ const App: React.FC = () => {
                 );
               })}
 
+              {/* ACTION PLAN SECTION */}
               <section className="space-y-8 pt-8 border-t border-black/5">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-[#e8ebf2] rounded-xl polymer-relief text-red-500"><LucideIcons.Target className="w-5 h-5" /></div>
                   <h3 className="text-lg font-black text-[#1e272e] uppercase tracking-widest">Corrective Action Plan</h3>
                 </div>
-                {actionPlan.map(item => (
-                  <div key={item.id} className="bg-[#e8ebf2] p-8 rounded-[40px] polymer-inset space-y-6 relative group">
-                    <button onClick={() => removeActionPlanRow(item.id)} className="absolute -top-3 -right-3 p-2.5 bg-white rounded-full text-red-500 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-10"><LucideIcons.Trash2 className="w-4 h-4"/></button>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="space-y-2">
-                        <div className="h-10 flex items-center"><label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Deficiency Detail</label></div>
-                        <textarea value={item.problem} onChange={e => updateActionPlan(item.id, 'problem', e.target.value)} className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none text-sm min-h-[120px] resize-none" placeholder="Clinical observation..."/>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="h-10 flex items-center justify-between">
-                          <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Remediation Steps</label>
+                <div className="space-y-8">
+                  {actionPlan.map(item => (
+                    <div key={item.id} className="bg-[#e8ebf2] p-8 rounded-[40px] polymer-inset relative group animate-fade-in space-y-6">
+                      <button onClick={() => removeActionPlanRow(item.id)} className="absolute -top-3 -right-3 p-2.5 bg-white rounded-full text-red-500 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-10"><LucideIcons.Trash2 className="w-4 h-4"/></button>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-2">
+                          <div className="h-10 flex items-center"><label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Deficiency Detail</label></div>
+                          <textarea value={item.problem} onChange={e => updateActionPlan(item.id, 'problem', e.target.value)} className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none text-sm min-h-[100px] resize-none focus:ring-1 focus:ring-red-200"  placeholder="Clinical observation..."/>
                         </div>
-                        <textarea value={item.action} onChange={e => updateActionPlan(item.id, 'action', e.target.value)} className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none text-sm min-h-[120px] resize-none text-[#4a69bd] font-bold" placeholder="Immediate corrective action..."/>
+                        <div className="space-y-2">
+                          <div className="h-10 flex items-center justify-between">
+                            <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Remediation Steps</label>
+                            <button onClick={() => suggestActionPlan(item.id, item.problem)} disabled={isSuggesting[item.id] || !item.problem.trim() || !isOnline} className="text-[8px] font-black uppercase text-[#4a69bd] bg-[#e8ebf2] px-3 py-1.5 rounded-full polymer-relief disabled:opacity-30 hover:scale-105 transition-all">
+                              {isSuggesting[item.id] ? <LucideIcons.Loader2 className="animate-spin w-3 h-3"/> : <LucideIcons.Sparkles className="w-3 h-3"/>}
+                              AI Assist
+                             </button>
+                          </div>
+                          <textarea value={item.action} onChange={e => updateActionPlan(item.id, 'action', e.target.value)} className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none text-sm min-h-[100px] resize-none text-[#4a69bd] font-bold focus:ring-1 focus:ring-[#4a69bd]/20" placeholder="Corrective action to be taken..."/>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-black/5">
+                        <div className="space-y-2">
+                          <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Accountable Personnel</label>
+                          <input type="text" value={item.responsible} onChange={e => updateActionPlan(item.id, 'responsible', e.target.value)} placeholder="Name / Designation" className="w-full bg-[#e8ebf2] p-4 rounded-2xl polymer-inset outline-none text-xs font-bold"/>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Target Resolution Date</label>
+                          <input type="date" value={item.targetDate} onChange={e => updateActionPlan(item.id, 'targetDate', e.target.value)} className="w-full bg-[#e8ebf2] p-4 rounded-2xl polymer-inset outline-none text-xs font-bold"/>
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+                <button onClick={addActionPlanRow} className="w-full py-10 border-4 border-dashed border-slate-300 rounded-[35px] text-slate-400 font-black uppercase tracking-widest text-[10px] hover:bg-white/40 transition-all flex items-center justify-center gap-3"><LucideIcons.PlusCircle className="w-5 h-5"/> Log Clinical Deficiency Entry</button>
+              </section>
+
+              {/* AI SUMMARY SECTION */}
+              <section className="space-y-8 pt-8 border-t border-black/5">
+                <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-4">
+                    <div className="p-3 bg-[#e8ebf2] rounded-xl polymer-relief text-purple-500"><LucideIcons.BrainCircuit className="w-5 h-5" /></div>
+                    <h3 className="text-lg font-black text-[#1e272e] uppercase tracking-widest">Clinical Summary Report</h3>
                   </div>
-                ))}
-                <button onClick={addActionPlanRow} className="w-full py-10 border-4 border-dashed border-slate-300 rounded-[35px] text-slate-400 font-black uppercase tracking-widest text-[10px] hover:bg-white/40 transition-all">+ Log Clinical Deficiency</button>
+                  {isOnline && (
+                    <div className="flex gap-2">
+                      {aiSummary && (
+                        <button onClick={() => { navigator.clipboard.writeText(aiSummary); alert("Summary copied to clinical clipboard."); }} className="p-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-slate-400 hover:text-[#4a69bd] transition-all"><LucideIcons.Copy className="w-4 h-4"/></button>
+                      )}
+                      <button onClick={generateAISummary} disabled={isGeneratingSummary} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-[#4a69bd] font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all">
+                        {isGeneratingSummary ? <LucideIcons.Loader2 className="animate-spin w-3.5 h-3.5"/> : <LucideIcons.Sparkles className="w-3.5 h-3.5"/>}
+                        {aiSummary ? 'Regenerate Analysis' : 'Synthesize Report'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {aiSummary && (
+                  <div className="bg-[#e8ebf2] p-8 rounded-[40px] polymer-inset animate-fade-in border-l-4 border-[#4a69bd]">
+                    <p className="text-[#2d3436] font-medium leading-relaxed italic text-sm">{aiSummary}</p>
+                  </div>
+                )}
               </section>
             </div>
           </main>
@@ -355,11 +485,11 @@ const App: React.FC = () => {
           <aside className="space-y-8 sticky top-8 h-fit no-print">
             <div className="bg-[#e8ebf2] p-10 rounded-[45px] polymer-relief text-center space-y-8">
               <div className="space-y-1">
-                <span className="font-mono text-[10px] uppercase font-black text-slate-400">Final Compliance</span>
+                <span className="font-mono text-[10px] uppercase font-black text-slate-400">Total Compliance</span>
                 <div className="text-7xl font-black text-[#4a69bd]">{Math.round(totals.percentage)}%</div>
               </div>
-              <div className="py-2 px-6 bg-black/5 rounded-full inline-block font-black uppercase tracking-widest text-[10px]" style={{ color: status.color }}>{status.label}</div>
-              <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden polymer-inset">
+              <div className="py-2.5 px-6 bg-black/5 rounded-full inline-block font-black uppercase tracking-widest text-[10px]" style={{ color: status.color }}>{status.label}</div>
+              <div className="h-2.5 w-full bg-black/5 rounded-full overflow-hidden polymer-inset">
                 <div className="h-full transition-all duration-1000" style={{ width: `${totals.percentage}%`, backgroundColor: status.hex }}></div>
               </div>
             </div>

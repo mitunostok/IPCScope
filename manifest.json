@@ -1,9 +1,8 @@
-
 {
   "name": "IPCScope Audit Pro",
   "short_name": "IPCScope",
   "description": "Clinical-grade Hospital Infection Prevention and Control audit tool. See. Assess. Improve.",
-  "start_url": "./index.html",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#e8ebf2",
