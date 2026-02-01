@@ -384,6 +384,22 @@ ${issues || 'None reported.'}`,
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8">
           <main className="bg-[#e8ebf2] rounded-[45px] p-8 md:p-12 polymer-relief">
             <div className="space-y-16">
+              {/* COMPLIANCE INSTRUCTIONS */}
+              <div className="p-6 bg-[#e8ebf2] rounded-3xl polymer-inset flex flex-wrap justify-center gap-6 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+                  <span>NC: Non Compliance</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+                  <span>PC: Partial Compliance</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-400"></span>
+                  <span>FC: Full Compliance</span>
+                </div>
+              </div>
+
               {selectedDepartment.sections.map((section) => {
                 const IconComp = (LucideIcons as any)[section.icon] || LucideIcons.FileText;
                 return (
