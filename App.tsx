@@ -9,6 +9,9 @@ import { db } from './db';
 
 const App: React.FC = () => {
   // --- States ---
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('sso_session') === 'true');
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
+  
   const [customTemplates, setCustomTemplates] = useState<Department[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<string>(DEPARTMENTS[0].id);
   const [header, setHeader] = useState<AuditHeader>({
@@ -47,6 +50,42 @@ const App: React.FC = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
         
+    const checkAuth = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+      
+      if (token) {
+        try {
+          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const apiUrl = import.meta.env.VITE_BIPCF_API_URL || (isLocalhost ? 'http://localhost:5000/api/auth/verify-handshake' : 'https://bipcf.org/api/auth/verify-handshake');
+          
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+          });
+          
+          const data = await res.json();
+          if (data.valid) {
+            localStorage.setItem('sso_session', 'true');
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            setIsAuthenticated(true);
+          } else {
+            setIsAuthenticated(false);
+          }
+        } catch (e) {
+          console.error("Auth verification failed", e);
+          setIsAuthenticated(false);
+        }
+      } else {
+        setIsAuthenticated(localStorage.getItem('sso_session') === 'true');
+      }
+      setIsAuthenticating(false);
+    };
+
+    checkAuth();
+
     const loadData = async () => {
       try {
         await db.init();
@@ -59,7 +98,10 @@ const App: React.FC = () => {
         console.error("DB Init error:", e);
       }
     };
-    loadData();
+    if (isAuthenticated || token) {
+      loadData();
+    }
+
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -279,6 +321,37 @@ ${issues || 'None reported.'}`,
     setAiSummary('');
     setHeader({ ...header, area: '' });
   };
+
+  if (isAuthenticating) {
+    return (
+      <div className="min-h-screen bg-[#e8ebf2] flex flex-col items-center justify-center">
+        <LucideIcons.Loader2 className="w-12 h-12 text-[#4a69bd] animate-spin mb-4" />
+        <p className="font-mono text-[10px] uppercase font-black text-slate-400 tracking-[0.4em] animate-pulse">Verifying Security Handshake...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#e8ebf2] flex flex-col items-center justify-center p-4">
+        <div className="bg-[#e8ebf2] p-12 rounded-[45px] polymer-relief text-center max-w-lg w-full">
+          <div className="w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
+            <LucideIcons.ShieldAlert className="w-10 h-10" />
+          </div>
+          <h1 className="text-4xl font-black text-[#1e272e] mb-2 uppercase tracking-tight">Access Denied</h1>
+          <p className="font-mono text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed mb-8">
+            IPCSCOPE is restricted to active members of the BIPCF Identity Portal. Direct access is prohibited.
+          </p>
+          <a href="https://bipcf.org" className="inline-block px-8 py-4 bg-[#4a69bd] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg hover:-translate-y-1 transition-all">
+            Return to BIPCF Portal
+          </a>
+        </div>
+        <footer className="mt-12 text-center opacity-60">
+          <p className="font-mono text-[9px] uppercase font-bold text-slate-400 tracking-[0.2em]">Powered by MedMetricPro</p>
+        </footer>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen px-4 py-8 md:py-12 flex flex-col items-center animate-fade-in bg-[#e8ebf2]">
