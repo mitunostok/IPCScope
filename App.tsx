@@ -11,7 +11,7 @@ const App: React.FC = () => {
   // --- States ---
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('sso_session') === 'true');
   const [isAuthenticating, setIsAuthenticating] = useState(true);
-  
+
   const [customTemplates, setCustomTemplates] = useState<Department[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<string>(DEPARTMENTS[0].id);
   const [header, setHeader] = useState<AuditHeader>({
@@ -23,7 +23,7 @@ const App: React.FC = () => {
   const [actionPlan, setActionPlan] = useState<ActionPlanItem[]>([]);
   const [savedAudits, setSavedAudits] = useState<SavedAudit[]>([]);
   const [aiSummary, setAiSummary] = useState<string>('');
-  
+
   // UI States
   const [isExporting, setIsExporting] = useState(false);
   const [showExportSuccess, setShowExportSuccess] = useState(false);
@@ -33,7 +33,7 @@ const App: React.FC = () => {
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
+
   // Template Creator State
   const [newTemplate, setNewTemplate] = useState<Department>({
     id: '',
@@ -46,25 +46,25 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-        
+
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
-        
+
     const checkAuth = async () => {
       if (token) {
         try {
           const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
           const apiUrl = import.meta.env.VITE_BIPCF_API_URL || (isLocalhost ? 'http://localhost:5000/api/handshake/verify-handshake' : 'https://api.bipcf.org/api/handshake/verify-handshake');
-          
+
           const res = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token })
           });
-          
+
           const data = await res.json();
           if (data.valid) {
             localStorage.setItem('sso_session', 'true');
@@ -91,7 +91,7 @@ const App: React.FC = () => {
         await db.init();
         const audits = await db.getAudits();
         setSavedAudits(audits.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-        
+
         const templates = await db.getTemplates();
         setCustomTemplates(templates);
       } catch (e) {
@@ -105,14 +105,14 @@ const App: React.FC = () => {
 
     return () => {
       window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);     
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
   // --- Derived Data ---
   const allTemplates = useMemo(() => [...DEPARTMENTS, ...customTemplates], [customTemplates]);
-  
-  const selectedDepartment = useMemo(() => 
+
+  const selectedDepartment = useMemo(() =>
     allTemplates.find(d => d.id === selectedDeptId) || allTemplates[0],
     [selectedDeptId, allTemplates]
   );
@@ -154,7 +154,7 @@ const App: React.FC = () => {
     const breakdown = selectedDepartment.sections.map(s => {
       const score = totals.sectionSubtotals[s.id];
       const max = s.maxScore || s.questions.length * 2;
-      return `${s.title}: ${score}/${max} (${Math.round((score/max)*100)}%)`;
+      return `${s.title}: ${score}/${max} (${Math.round((score / max) * 100)}%)`;
     }).join(', ');
 
     const issues = actionPlan.map(a => `- ${a.problem}`).join('\n');
@@ -219,8 +219,8 @@ ${issues || 'None reported.'}`,
 
   const saveTemplate = async () => {
     if (!newTemplate.name) { setErrorMessage("Template name is required."); return; }
-    const templateToSave = { 
-      ...newTemplate, 
+    const templateToSave = {
+      ...newTemplate,
       id: 'custom-' + Date.now(),
       sections: newTemplate.sections.map(s => ({ ...s, maxScore: s.questions.length * 2 }))
     };
@@ -261,22 +261,22 @@ ${issues || 'None reported.'}`,
       await db.saveAudit(audit);
       const updatedAudits = await db.getAudits();
       setSavedAudits(updatedAudits.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-      
+
       const doc = new jsPDF();
       doc.setFontSize(22); doc.setTextColor(74, 105, 189);
       doc.text(`IPC AUDIT: ${selectedDepartment.name}`, 15, 20);
-      
+
       doc.setFontSize(10); doc.setTextColor(100, 100, 100);
       doc.text(`Auditor: ${header.auditor} | Area: ${header.area} | Date: ${header.date}`, 15, 30);
       doc.text(`Score: ${Math.round(totals.percentage)}% (${status.label})`, 15, 36);
-      
-      autoTable(doc, { 
-        startY: 45, 
-        head: [['Section', 'Score', 'Compliance']], 
+
+      autoTable(doc, {
+        startY: 45,
+        head: [['Section', 'Score', 'Compliance']],
         body: selectedDepartment.sections.map(s => [
-          s.title, 
-          `${totals.sectionSubtotals[s.id]} / ${s.maxScore || s.questions.length * 2}`, 
-          `${Math.round((totals.sectionSubtotals[s.id]/(s.maxScore || s.questions.length * 2))*100)}%`
+          s.title,
+          `${totals.sectionSubtotals[s.id]} / ${s.maxScore || s.questions.length * 2}`,
+          `${Math.round((totals.sectionSubtotals[s.id] / (s.maxScore || s.questions.length * 2)) * 100)}%`
         ]),
         headStyles: { fillColor: [74, 105, 189] }
       });
@@ -355,7 +355,7 @@ ${issues || 'None reported.'}`,
 
   return (
     <div className="min-h-screen px-4 py-8 md:py-12 flex flex-col items-center animate-fade-in bg-[#e8ebf2]">
-      
+
       {/* --- Modals --- */}
       {isTemplateManagerOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#e8ebf2]/95 backdrop-blur-xl animate-fade-in overflow-y-auto">
@@ -370,7 +370,7 @@ ${issues || 'None reported.'}`,
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest ml-4">Ward Name</label>
-                <input type="text" value={newTemplate.name} onChange={e => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="Ward Name (e.g. Isolation Ward)" className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none font-bold text-[#4a69bd]"/>
+                <input type="text" value={newTemplate.name} onChange={e => setNewTemplate({ ...newTemplate, name: e.target.value })} placeholder="Ward Name (e.g. Isolation Ward)" className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none font-bold text-[#4a69bd]" />
               </div>
               <button onClick={saveTemplate} className="w-full py-6 bg-[#4a69bd] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg hover:-translate-y-1 transition-all">Save Institutional Standard</button>
             </div>
@@ -408,13 +408,13 @@ ${issues || 'None reported.'}`,
           {errorMessage && (
             <div className="p-5 bg-red-100 border-l-4 border-red-500 rounded-2xl flex justify-between items-center text-red-800 text-xs font-bold uppercase tracking-widest animate-pulse">
               <span>{errorMessage}</span>
-              <button onClick={() => setErrorMessage(null)}><LucideIcons.XCircle className="w-5 h-5"/></button>
+              <button onClick={() => setErrorMessage(null)}><LucideIcons.XCircle className="w-5 h-5" /></button>
             </div>
           )}
 
           {showExportSuccess && (
             <div className="p-5 bg-green-100 border-l-4 border-green-500 rounded-2xl flex justify-between items-center text-green-800 text-xs font-bold uppercase tracking-widest">
-              <span className="flex items-center gap-2"><LucideIcons.CheckCircle className="w-4 h-4"/> Clinical Audit Document Finalized</span>
+              <span className="flex items-center gap-2"><LucideIcons.CheckCircle className="w-4 h-4" /> Clinical Audit Document Finalized</span>
             </div>
           )}
 
@@ -425,8 +425,8 @@ ${issues || 'None reported.'}`,
               </h1>
               <p className="font-mono text-[10px] uppercase font-black text-slate-400 tracking-[0.4em]">See. Assess. Improve.</p>
               <div className="flex flex-wrap gap-2 mt-4 no-print">
-                <button onClick={() => setIsHistoryOpen(true)} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-slate-400 font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all"><LucideIcons.Archive className="w-3.5 h-3.5"/> History</button>
-                <button onClick={() => setIsTemplateManagerOpen(true)} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-[#4a69bd] font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all"><LucideIcons.LayoutTemplate className="w-3.5 h-3.5"/> Designer</button>
+                <button onClick={() => setIsHistoryOpen(true)} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-slate-400 font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all"><LucideIcons.Archive className="w-3.5 h-3.5" /> History</button>
+                <button onClick={() => setIsTemplateManagerOpen(true)} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-[#4a69bd] font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all"><LucideIcons.LayoutTemplate className="w-3.5 h-3.5" /> Designer</button>
               </div>
             </div>
             <div className="hidden md:block text-right">
@@ -445,11 +445,11 @@ ${issues || 'None reported.'}`,
             </div>
             <div className="space-y-2">
               <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest ml-4">Ward / Area</label>
-              <input type="text" value={header.area} onChange={e => setHeader({...header, area: e.target.value})} placeholder="e.g. ICU-2" className="w-full bg-[#e8ebf2] p-5 rounded-3xl polymer-inset outline-none font-bold text-[#2d3436]"/>
+              <input type="text" value={header.area} onChange={e => setHeader({ ...header, area: e.target.value })} placeholder="e.g. ICU-2" className="w-full bg-[#e8ebf2] p-5 rounded-3xl polymer-inset outline-none font-bold text-[#2d3436]" />
             </div>
             <div className="space-y-2">
               <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest ml-4">Auditor Credential</label>
-              <input type="text" value={header.auditor} onChange={e => setHeader({...header, auditor: e.target.value})} placeholder="Full Name or ID" className="w-full bg-[#e8ebf2] p-5 rounded-3xl polymer-inset outline-none font-bold text-[#2d3436]"/>
+              <input type="text" value={header.auditor} onChange={e => setHeader({ ...header, auditor: e.target.value })} placeholder="Full Name or ID" className="w-full bg-[#e8ebf2] p-5 rounded-3xl polymer-inset outline-none font-bold text-[#2d3436]" />
             </div>
           </div>
         </header>
@@ -486,7 +486,7 @@ ${issues || 'None reported.'}`,
                         <div key={q.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 group">
                           <p className="font-bold text-[#2d3436] flex-grow pr-4 group-hover:text-[#4a69bd] transition-colors">{q.text}</p>
                           <div className="flex bg-[#e8ebf2] p-2 rounded-2xl polymer-inset gap-1">
-                            {[{label:'NC',v:0}, {label:'PC',v:1}, {label:'FC',v:2}].map(opt => (
+                            {[{ label: 'NC', v: 0 }, { label: 'PC', v: 1 }, { label: 'FC', v: 2 }].map(opt => (
                               <button key={opt.v} onClick={() => handleScoreChange(q.id, opt.v as ScoreValue)} className={`px-4 py-2 rounded-xl font-mono text-[9px] font-black transition-all ${scores[q.id] === opt.v ? 'bg-[#e8ebf2] polymer-relief text-[#4a69bd] scale-105 shadow-md' : 'text-slate-400'}`}>
                                 {opt.label}
                               </button>
@@ -508,55 +508,55 @@ ${issues || 'None reported.'}`,
                 <div className="space-y-8">
                   {actionPlan.map(item => (
                     <div key={item.id} className="bg-[#e8ebf2] p-8 rounded-[40px] polymer-inset relative group animate-fade-in space-y-6">
-                      <button onClick={() => removeActionPlanRow(item.id)} className="absolute -top-3 -right-3 p-2.5 bg-white rounded-full text-red-500 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-10"><LucideIcons.Trash2 className="w-4 h-4"/></button>
-                      
+                      <button onClick={() => removeActionPlanRow(item.id)} className="absolute -top-3 -right-3 p-2.5 bg-white rounded-full text-red-500 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-10"><LucideIcons.Trash2 className="w-4 h-4" /></button>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="space-y-2">
                           <div className="h-10 flex items-center"><label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Deficiency Detail</label></div>
-                          <textarea value={item.problem} onChange={e => updateActionPlan(item.id, 'problem', e.target.value)} className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none text-sm min-h-[100px] resize-none focus:ring-1 focus:ring-red-200"  placeholder="Clinical observation..."/>
+                          <textarea value={item.problem} onChange={e => updateActionPlan(item.id, 'problem', e.target.value)} className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none text-sm min-h-[100px] resize-none focus:ring-1 focus:ring-red-200" placeholder="Clinical observation..." />
                         </div>
                         <div className="space-y-2">
                           <div className="h-10 flex items-center justify-between">
                             <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Remediation Steps</label>
                             <button onClick={() => suggestActionPlan(item.id, item.problem)} disabled={isSuggesting[item.id] || !item.problem.trim() || !isOnline} className="text-[8px] font-black uppercase text-[#4a69bd] bg-[#e8ebf2] px-3 py-1.5 rounded-full polymer-relief disabled:opacity-30 hover:scale-105 transition-all">
-                              {isSuggesting[item.id] ? <LucideIcons.Loader2 className="animate-spin w-3 h-3"/> : <LucideIcons.Sparkles className="w-3 h-3"/>}
+                              {isSuggesting[item.id] ? <LucideIcons.Loader2 className="animate-spin w-3 h-3" /> : <LucideIcons.Sparkles className="w-3 h-3" />}
                               AI Assist
-                             </button>
+                            </button>
                           </div>
-                          <textarea value={item.action} onChange={e => updateActionPlan(item.id, 'action', e.target.value)} className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none text-sm min-h-[100px] resize-none text-[#4a69bd] font-bold focus:ring-1 focus:ring-[#4a69bd]/20" placeholder="Corrective action to be taken..."/>
+                          <textarea value={item.action} onChange={e => updateActionPlan(item.id, 'action', e.target.value)} className="w-full bg-[#e8ebf2] p-5 rounded-2xl polymer-inset outline-none text-sm min-h-[100px] resize-none text-[#4a69bd] font-bold focus:ring-1 focus:ring-[#4a69bd]/20" placeholder="Corrective action to be taken..." />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-black/5">
                         <div className="space-y-2">
                           <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Accountable Personnel</label>
-                          <input type="text" value={item.responsible} onChange={e => updateActionPlan(item.id, 'responsible', e.target.value)} placeholder="Name / Designation" className="w-full bg-[#e8ebf2] p-4 rounded-2xl polymer-inset outline-none text-xs font-bold"/>
+                          <input type="text" value={item.responsible} onChange={e => updateActionPlan(item.id, 'responsible', e.target.value)} placeholder="Name / Designation" className="w-full bg-[#e8ebf2] p-4 rounded-2xl polymer-inset outline-none text-xs font-bold" />
                         </div>
                         <div className="space-y-2">
                           <label className="font-mono text-[9px] uppercase font-black text-slate-400 tracking-widest">Target Resolution Date</label>
-                          <input type="date" value={item.targetDate} onChange={e => updateActionPlan(item.id, 'targetDate', e.target.value)} className="w-full bg-[#e8ebf2] p-4 rounded-2xl polymer-inset outline-none text-xs font-bold"/>
+                          <input type="date" value={item.targetDate} onChange={e => updateActionPlan(item.id, 'targetDate', e.target.value)} className="w-full bg-[#e8ebf2] p-4 rounded-2xl polymer-inset outline-none text-xs font-bold" />
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                <button onClick={addActionPlanRow} className="w-full py-10 border-4 border-dashed border-slate-300 rounded-[35px] text-slate-400 font-black uppercase tracking-widest text-[10px] hover:bg-white/40 transition-all flex items-center justify-center gap-3"><LucideIcons.PlusCircle className="w-5 h-5"/> Log Clinical Deficiency Entry</button>
+                <button onClick={addActionPlanRow} className="w-full py-10 border-4 border-dashed border-slate-300 rounded-[35px] text-slate-400 font-black uppercase tracking-widest text-[10px] hover:bg-white/40 transition-all flex items-center justify-center gap-3"><LucideIcons.PlusCircle className="w-5 h-5" /> Log Clinical Deficiency Entry</button>
               </section>
 
               {/* AI SUMMARY SECTION */}
               <section className="space-y-8 pt-8 border-t border-black/5">
                 <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4">
                     <div className="p-3 bg-[#e8ebf2] rounded-xl polymer-relief text-purple-500"><LucideIcons.BrainCircuit className="w-5 h-5" /></div>
                     <h3 className="text-lg font-black text-[#1e272e] uppercase tracking-widest">Clinical Summary Report</h3>
                   </div>
                   {isOnline && (
                     <div className="flex gap-2">
                       {aiSummary && (
-                        <button onClick={() => { navigator.clipboard.writeText(aiSummary); alert("Summary copied to clinical clipboard."); }} className="p-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-slate-400 hover:text-[#4a69bd] transition-all"><LucideIcons.Copy className="w-4 h-4"/></button>
+                        <button onClick={() => { navigator.clipboard.writeText(aiSummary); alert("Summary copied to clinical clipboard."); }} className="p-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-slate-400 hover:text-[#4a69bd] transition-all"><LucideIcons.Copy className="w-4 h-4" /></button>
                       )}
                       <button onClick={generateAISummary} disabled={isGeneratingSummary} className="px-5 py-2.5 bg-[#e8ebf2] rounded-full polymer-relief text-[#4a69bd] font-bold uppercase text-[9px] tracking-widest flex items-center gap-2 hover:scale-105 transition-all">
-                        {isGeneratingSummary ? <LucideIcons.Loader2 className="animate-spin w-3.5 h-3.5"/> : <LucideIcons.Sparkles className="w-3.5 h-3.5"/>}
+                        {isGeneratingSummary ? <LucideIcons.Loader2 className="animate-spin w-3.5 h-3.5" /> : <LucideIcons.Sparkles className="w-3.5 h-3.5" />}
                         {aiSummary ? 'Regenerate Analysis' : 'Synthesize Report'}
                       </button>
                     </div>
@@ -600,10 +600,10 @@ ${issues || 'None reported.'}`,
 
             <div className="space-y-4">
               <button onClick={handleExportPDF} disabled={isExporting} className="w-full bg-[#4a69bd] text-white py-10 rounded-[40px] font-black text-2xl uppercase tracking-widest shadow-xl flex items-center justify-center gap-5 hover:-translate-y-1 active:translate-y-0 transition-all disabled:opacity-50 group">
-                {isExporting ? <LucideIcons.Loader2 className="animate-spin w-8 h-8"/> : <LucideIcons.ShieldCheck className="w-8 h-8 group-hover:scale-110 transition-transform"/>}
+                {isExporting ? <LucideIcons.Loader2 className="animate-spin w-8 h-8" /> : <LucideIcons.ShieldCheck className="w-8 h-8 group-hover:scale-110 transition-transform" />}
                 Seal & Export
               </button>
-              <button onClick={startNewAudit} className="w-full bg-[#e8ebf2] text-slate-400 py-4 rounded-[25px] polymer-inset font-bold text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white transition-all"><LucideIcons.RotateCcw className="w-3.5 h-3.5"/> Clear & Reset</button>
+              <button onClick={startNewAudit} className="w-full bg-[#e8ebf2] text-slate-400 py-4 rounded-[25px] polymer-inset font-bold text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white transition-all"><LucideIcons.RotateCcw className="w-3.5 h-3.5" /> Clear & Reset</button>
             </div>
           </aside>
         </div>
