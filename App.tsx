@@ -50,10 +50,10 @@ const App: React.FC = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
         
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+        
     const checkAuth = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const token = urlParams.get('token');
-      
       if (token) {
         try {
           const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
