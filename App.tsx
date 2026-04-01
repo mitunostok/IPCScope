@@ -57,7 +57,7 @@ const App: React.FC = () => {
       if (token) {
         try {
           const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          const apiUrl = import.meta.env.VITE_BIPCF_API_URL || (isLocalhost ? 'http://localhost:5000/api/handshake/verify-handshake' : 'https://api.bipcf.org/api/handshake/verify-handshake');
+          const apiUrl = import.meta.env.VITE_BIPCF_API_URL || (isLocalhost ? 'http://localhost:5000/api/handshake/verify-handshake' : 'https://api.bipcf.org/api/handshake/verify-handshake'); //updated
 
           const res = await fetch(apiUrl, {
             method: 'POST',
